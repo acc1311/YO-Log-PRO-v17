@@ -1,0 +1,91 @@
+name: Build YO Log PRO v17
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.8.10 (Windows 7 compatible)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.8.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller==5.13.2
+          pip install pyserial==3.5
+
+      - name: Build EXE with PyInstaller
+        run: |
+          pyinstaller --onefile ^
+            --windowed ^
+            --name "YO_Log_PRO_v17" ^
+            --icon "icon.ico" ^
+            --add-data "contests.json;." ^
+            --add-data "config.json;." ^
+            --hidden-import serial ^
+            --hidden-import serial.tools ^
+            --hidden-import serial.tools.list_ports ^
+            yo_log_pro.py
+        shell: cmd
+
+      - name: Verify build
+        run: |
+          dir dist\
+          echo Build completed successfully!
+        shell: cmd
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: YO_Log_PRO_v17_Win7
+          path: dist\YO_Log_PRO_v17.exe
+          retention-days: 30
+
+      - name: Create Release
+        uses: actions/create-release@v1
+        id: create_release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v17.0-${{ github.run_number }}
+          release_name: "YO Log PRO v17.0 — CAT + Win7 Build #${{ github.run_number }}"
+          body: |
+            ## 📻 YO Log PRO v17.0 — CAT Edition
+
+            ### ✅ Compatibil: Windows 7 SP1 / 8 / 10 / 11 (32 & 64 bit)
+            ### 🐍 Build: Python 3.8.10 + PyInstaller 5.13.2
+
+            ### 🆕 NOU în v17:
+            - 📡 **CAT bidirecțional**: Yaesu / Icom CI-V / Kenwood / Elecraft / Hamlib
+            - 📝 **Log Nou** cu nume personalizat
+            - 🎨 **6 teme** predefinite + editor culori custom
+            - ⏱ **Timer** cu avertizări sonore (5min, 1min, final)
+
+            ### 📥 Instalare:
+            1. Descarcă `YO_Log_PRO_v17.exe`
+            2. Pune-l într-un folder dedicat (ex: `C:\YOLog\`)
+            3. Rulează direct — nu necesită instalare Python
+
+            > ⚠️ **Windows 7**: Instalează [vcredist_x64.exe](https://aka.ms/vs/17/release/vc_redist.x64.exe) dacă apare eroare DLL
+          draft: false
+          prerelease: false
+
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: dist\YO_Log_PRO_v17.exe
+          asset_name: YO_Log_PRO_v17.exe
+          asset_content_type: application/octet-stream
