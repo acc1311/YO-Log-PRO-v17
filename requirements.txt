@@ -1,0 +1,13 @@
+# YO Log PRO v17 — Dependențe Python
+# Instalare: pip install -r requirements.txt
+#
+# IMPORTANT: Folosiți Python 3.8.10 pentru compatibilitate Windows 7!
+# Download: https://www.python.org/downloads/release/python-3810/
+
+# CAT — comunicare serial cu transceiver-ul
+pyserial==3.5
+
+# Build EXE
+pyinstaller==5.13.2
+
+# tkinter este inclus în Python standard — nu necesită instalare separată
