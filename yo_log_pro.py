@@ -1401,150 +1401,182 @@ class PreviewDialog(tk.Toplevel):
 
 
 class CATSettingsDialog(tk.Toplevel):
-    """Dialog complet pentru configurare și control CAT."""
+    """Dialog complet pentru configurare si control CAT."""
     def __init__(self, parent, cfg, cat_engine):
         super().__init__(parent)
         self.result = None
         self.cfg = dict(cfg)
         self.cat = cat_engine
-        self.title("📡 CAT — Computer Aided Transceiver")
-        self.geometry("520x560")
+        self.title("CAT — Computer Aided Transceiver")
+        self.geometry("560x620")
         self.configure(bg=TH["bg"])
+        self.resizable(False, False)
         self.transient(parent)
         self.grab_set()
         self._build()
-        self._refresh_status()
         center_dialog(self, parent)
+        self._sched_refresh()
 
     def _build(self):
-        lo = {"bg":TH["bg"],"fg":TH["fg"],"font":("Consolas",11)}
-        eo = {"bg":TH["entry_bg"],"fg":TH["fg"],"font":("Consolas",11),"insertbackground":TH["fg"]}
+        lo  = {"bg":TH["bg"], "fg":TH["fg"], "font":("Consolas",11)}
+        lo9 = {"bg":TH["bg"], "fg":TH["fg"], "font":("Consolas",9)}
+        eo  = {"bg":TH["entry_bg"], "fg":TH["fg"], "font":("Consolas",11),
+               "insertbackground":TH["fg"]}
 
-        tk.Label(self, text="📡 CAT Control", bg=TH["bg"], fg=TH["gold"],
-                 font=("Consolas",14,"bold")).pack(pady=(12,4))
+        # ── Titlu ──
+        tk.Label(self, text="  CAT — Computer Aided Transceiver",
+                 bg=TH["bg"], fg=TH["gold"],
+                 font=("Consolas",13,"bold")).pack(fill="x", padx=0, pady=(10,4))
 
-        # ── Status LED ──
-        sf = tk.Frame(self, bg=TH["bg"]); sf.pack(fill="x", padx=20, pady=4)
-        self._status_led = tk.Label(sf, text="⬤", bg=TH["bg"], fg=TH["err"], font=("Consolas",14))
+        # ── Status + Freq/Mod live ──
+        sf = tk.Frame(self, bg=TH["entry_bg"], bd=1, relief="solid")
+        sf.pack(fill="x", padx=16, pady=4)
+        row0 = tk.Frame(sf, bg=TH["entry_bg"]); row0.pack(fill="x", padx=8, pady=4)
+        self._status_led = tk.Label(row0, text="●", bg=TH["entry_bg"],
+                                    fg=TH["err"], font=("Consolas",16))
         self._status_led.pack(side="left")
-        self._status_lbl = tk.Label(sf, text="Deconectat / Disconnected",
-                                    bg=TH["bg"], fg=TH["fg"], font=("Consolas",11))
+        self._status_lbl = tk.Label(row0, text="Deconectat / Disconnected",
+                                    bg=TH["entry_bg"], fg=TH["fg"], font=("Consolas",11))
         self._status_lbl.pack(side="left", padx=6)
-
-        # ── Frecvență / Mod citit ──
-        rf = tk.Frame(self, bg=TH["entry_bg"], bd=1, relief="solid"); rf.pack(fill="x", padx=20, pady=4)
-        self._freq_lbl = tk.Label(rf, text="Freq: ---", bg=TH["entry_bg"],
+        row1 = tk.Frame(sf, bg=TH["entry_bg"]); row1.pack(fill="x", padx=8, pady=(0,6))
+        self._freq_lbl = tk.Label(row1, text="Freq: ---", bg=TH["entry_bg"],
                                   fg=TH["gold"], font=("Consolas",13,"bold"))
-        self._freq_lbl.pack(side="left", padx=10, pady=6)
-        self._mode_lbl = tk.Label(rf, text="Mod: ---", bg=TH["entry_bg"],
+        self._freq_lbl.pack(side="left", padx=(0,16))
+        self._mode_lbl = tk.Label(row1, text="Mod: ---", bg=TH["entry_bg"],
                                   fg=TH["cyan"], font=("Consolas",12))
-        self._mode_lbl.pack(side="left", padx=10)
+        self._mode_lbl.pack(side="left")
 
-        sep = tk.Frame(self, bg=TH["warn"], height=1); sep.pack(fill="x", padx=20, pady=6)
+        # ── Separator ──
+        tk.Frame(self, bg=TH["warn"], height=1).pack(fill="x", padx=16, pady=6)
 
-        # ── Protocol ──
-        pf = tk.Frame(self, bg=TH["bg"]); pf.pack(fill="x", padx=20, pady=3)
-        tk.Label(pf, text="Protocol:", **lo).pack(side="left", w=120)
+        # ── Grid cu setari ──
+        gf = tk.Frame(self, bg=TH["bg"]); gf.pack(fill="x", padx=16, pady=2)
+        gf.columnconfigure(1, weight=1)
+
+        # Protocol
+        tk.Label(gf, text="Protocol:", **lo).grid(row=0, column=0, sticky="w", pady=5, padx=(0,10))
         self._prot_v = tk.StringVar(value=self.cfg.get("cat_protocol","Yaesu CAT"))
-        pcb = ttk.Combobox(pf, textvariable=self._prot_v, values=CAT_PROTOCOLS,
-                           state="readonly", width=22, font=("Consolas",11))
-        pcb.pack(side="left", padx=8)
-        pcb.bind("<<ComboboxSelected>>", self._on_protocol_change)
+        self._prot_cb = ttk.Combobox(gf, textvariable=self._prot_v,
+                                     values=CAT_PROTOCOLS, state="readonly",
+                                     width=26, font=("Consolas",11))
+        self._prot_cb.grid(row=0, column=1, sticky="w", pady=5)
+        self._prot_cb.bind("<<ComboboxSelected>>", self._on_protocol_change)
 
-        # ── Port COM ──
-        cf2 = tk.Frame(self, bg=TH["bg"]); cf2.pack(fill="x", padx=20, pady=3)
-        tk.Label(cf2, text="Port COM:", **lo).pack(side="left", w=120)
-        ports = CATEngine.list_ports() or ["(niciun port)"]
-        saved_port = self.cfg.get("cat_port","")
-        if saved_port and saved_port not in ports: ports.insert(0, saved_port)
-        self._port_v = tk.StringVar(value=saved_port or (ports[0] if ports else ""))
-        self._port_cb = ttk.Combobox(cf2, textvariable=self._port_v, values=ports,
-                                     width=14, font=("Consolas",11))
-        self._port_cb.pack(side="left", padx=8)
-        tk.Button(cf2, text="🔄", command=self._refresh_ports,
-                  bg=TH["btn_bg"], fg="white", font=("Consolas",10), width=3).pack(side="left")
+        # Port COM
+        tk.Label(gf, text="Port COM:", **lo).grid(row=1, column=0, sticky="w", pady=5, padx=(0,10))
+        port_frame = tk.Frame(gf, bg=TH["bg"]); port_frame.grid(row=1, column=1, sticky="w", pady=5)
+        ports = CATEngine.list_ports()
+        if not ports: ports = [""]
+        saved = self.cfg.get("cat_port","")
+        if saved and saved not in ports: ports.insert(0, saved)
+        self._port_v = tk.StringVar(value=saved or ports[0])
+        self._port_cb = ttk.Combobox(port_frame, textvariable=self._port_v,
+                                     values=ports, width=12, font=("Consolas",11))
+        self._port_cb.pack(side="left")
+        tk.Button(port_frame, text="Refresh", command=self._refresh_ports,
+                  bg=TH["btn_bg"], fg="white", font=("Consolas",9),
+                  width=7).pack(side="left", padx=6)
 
-        # ── Baud Rate ──
-        bf = tk.Frame(self, bg=TH["bg"]); bf.pack(fill="x", padx=20, pady=3)
-        tk.Label(bf, text="Baud Rate:", **lo).pack(side="left", w=120)
+        # Baud
+        tk.Label(gf, text="Baud Rate:", **lo).grid(row=2, column=0, sticky="w", pady=5, padx=(0,10))
         self._baud_v = tk.StringVar(value=str(self.cfg.get("cat_baud",38400)))
-        ttk.Combobox(bf, textvariable=self._baud_v,
+        ttk.Combobox(gf, textvariable=self._baud_v,
                      values=["1200","2400","4800","9600","19200","38400","57600","115200"],
-                     state="readonly", width=10, font=("Consolas",11)).pack(side="left", padx=8)
+                     state="readonly", width=12, font=("Consolas",11)).grid(row=2, column=1, sticky="w", pady=5)
 
-        # ── CI-V Address (Icom) ──
-        ivf = tk.Frame(self, bg=TH["bg"]); ivf.pack(fill="x", padx=20, pady=3)
-        self._civ_lbl = tk.Label(ivf, text="CI-V Adresă:", **lo)
-        self._civ_lbl.pack(side="left", w=120)
-        self._civ_e = tk.Entry(ivf, width=6, **eo)
+        # CI-V Address
+        self._civ_row_lbl = tk.Label(gf, text="CI-V Adresa (hex):", **lo)
+        self._civ_row_lbl.grid(row=3, column=0, sticky="w", pady=5, padx=(0,10))
+        civ_f = tk.Frame(gf, bg=TH["bg"]); civ_f.grid(row=3, column=1, sticky="w", pady=5)
+        self._civ_e = tk.Entry(civ_f, width=6, **eo)
         self._civ_e.insert(0, self.cfg.get("cat_civaddr","94"))
-        self._civ_e.pack(side="left", padx=8)
-        tk.Label(ivf, text="(hex, ex: 94=IC-7300, A2=IC-705)",
-                 bg=TH["bg"], fg=TH["warn"], font=("Consolas",9)).pack(side="left")
+        self._civ_e.pack(side="left")
+        tk.Label(civ_f, text="  94=IC-7300  A2=IC-705  76=IC-7100",
+                 **lo9).pack(side="left")
 
-        # ── Hamlib host:port ──
-        hf = tk.Frame(self, bg=TH["bg"]); hf.pack(fill="x", padx=20, pady=3)
-        self._ham_lbl = tk.Label(hf, text="Hamlib host:", **lo)
-        self._ham_lbl.pack(side="left", w=120)
-        self._ham_host_e = tk.Entry(hf, width=14, **eo)
+        # Hamlib host
+        self._ham_row_lbl = tk.Label(gf, text="Hamlib Host:", **lo)
+        self._ham_row_lbl.grid(row=4, column=0, sticky="w", pady=5, padx=(0,10))
+        ham_f = tk.Frame(gf, bg=TH["bg"]); ham_f.grid(row=4, column=1, sticky="w", pady=5)
+        self._ham_host_e = tk.Entry(ham_f, width=14, **eo)
         self._ham_host_e.insert(0, self.cfg.get("cat_hamlib_host","localhost"))
-        self._ham_host_e.pack(side="left", padx=4)
-        tk.Label(hf, text="Port:", **lo).pack(side="left")
-        self._ham_port_e = tk.Entry(hf, width=6, **eo)
+        self._ham_host_e.pack(side="left")
+        tk.Label(ham_f, text=" Port:", **lo).pack(side="left")
+        self._ham_port_e = tk.Entry(ham_f, width=6, **eo)
         self._ham_port_e.insert(0, str(self.cfg.get("cat_hamlib_port",4532)))
         self._ham_port_e.pack(side="left", padx=4)
 
-        # ── Hamlib help ──
-        self._ham_help = tk.Label(self,
-            text="rigctld -m 122 -r COM3 -s 38400  (FT-891=122)  |  rigctld -m 3061 -r COM4  (IC-7300=3061)",
+        # Hamlib help text
+        self._ham_help_lbl = tk.Label(gf,
+            text="Porneste: rigctld -m 122 -r COM3 -s 38400 (FT-891)  |  rigctld -m 3061 -r COM4 (IC-7300)",
             bg=TH["bg"], fg=TH["warn"], font=("Consolas",8), justify="left")
-        self._ham_help.pack(anchor="w", padx=24)
+        self._ham_help_lbl.grid(row=5, column=0, columnspan=2, sticky="w", pady=2)
 
-        sep2 = tk.Frame(self, bg=TH["accent"], height=1); sep2.pack(fill="x", padx=20, pady=8)
+        # ── Separator ──
+        tk.Frame(self, bg=TH["accent"], height=1).pack(fill="x", padx=16, pady=8)
 
-        # ── Butoane conectare ──
+        # ── Butoane Conectare ──
         cb = tk.Frame(self, bg=TH["bg"]); cb.pack(pady=4)
-        tk.Button(cb, text="🔌 Conectează / Connect", command=self._connect,
-                  bg=TH["ok"], fg="white", font=("Consolas",11,"bold"), width=20).pack(side="left", padx=6)
-        tk.Button(cb, text="⏹ Deconectează", command=self._disconnect,
-                  bg=TH["err"], fg="white", font=("Consolas",11), width=16).pack(side="left", padx=6)
+        tk.Button(cb, text="  Conecteaza / Connect  ", command=self._connect,
+                  bg=TH["ok"], fg="white",
+                  font=("Consolas",11,"bold")).pack(side="left", padx=6)
+        tk.Button(cb, text="  Deconecteaza  ", command=self._disconnect,
+                  bg=TH["err"], fg="white",
+                  font=("Consolas",11)).pack(side="left", padx=6)
 
-        # ── Test trimitere spre radio ──
+        # ── Test frecventa spre radio ──
         tf2 = tk.Frame(self, bg=TH["bg"]); tf2.pack(pady=4)
-        tk.Label(tf2, text="Test → Radio:", **lo).pack(side="left")
-        self._test_freq_e = tk.Entry(tf2, width=9, **eo)
-        self._test_freq_e.insert(0,"14200")
-        self._test_freq_e.pack(side="left", padx=4)
-        tk.Button(tf2, text="📡 Set Freq", command=self._test_set_freq,
-                  bg=TH["accent"], fg="white", font=("Consolas",10), width=10).pack(side="left", padx=4)
+        tk.Label(tf2, text="Test freq -> Radio:", **lo).pack(side="left")
+        self._test_freq_e = tk.Entry(tf2, width=8, **eo)
+        self._test_freq_e.insert(0, "14200")
+        self._test_freq_e.pack(side="left", padx=6)
+        tk.Button(tf2, text="Trimite / Send", command=self._test_set_freq,
+                  bg=TH["accent"], fg="white",
+                  font=("Consolas",10)).pack(side="left", padx=4)
 
-        # ── Salvare ──
-        bf2 = tk.Frame(self, bg=TH["bg"]); bf2.pack(pady=10)
-        tk.Button(bf2, text="✅ Salvează / Save", command=self._save,
-                  bg=TH["accent"], fg="white", font=("Consolas",11,"bold"), width=16).pack(side="left", padx=6)
-        tk.Button(bf2, text="✖ Închide", command=self.destroy,
-                  bg=TH["btn_bg"], fg="white", font=("Consolas",11), width=12).pack(side="left", padx=6)
+        # ── Salvare / Inchide ──
+        tk.Frame(self, bg=TH["btn_bg"], height=1).pack(fill="x", padx=16, pady=6)
+        bf2 = tk.Frame(self, bg=TH["bg"]); bf2.pack(pady=8)
+        tk.Button(bf2, text="  Salveaza / Save  ", command=self._save,
+                  bg=TH["accent"], fg="white",
+                  font=("Consolas",11,"bold")).pack(side="left", padx=8)
+        tk.Button(bf2, text="  Inchide  ", command=self.destroy,
+                  bg=TH["btn_bg"], fg="white",
+                  font=("Consolas",11)).pack(side="left", padx=8)
 
+        # Aplica vizibilitate initiala
         self._on_protocol_change()
-        self._sched_refresh()
 
     def _on_protocol_change(self, e=None):
         proto = self._prot_v.get()
-        is_icom   = proto == "Icom CI-V"
-        is_hamlib = proto == "Hamlib/rigctld"
-        is_manual = proto == "Manual (fără CAT)"
-        # show/hide CI-V
-        for w in [self._civ_lbl, self._civ_e]:
-            w.pack_configure() if is_icom else None
-        # show/hide Hamlib
-        for w in [self._ham_lbl, self._ham_host_e, self._ham_port_e, self._ham_help]:
-            w.pack_configure() if is_hamlib else None
-        # baud default
+        is_icom   = (proto == "Icom CI-V")
+        is_hamlib = (proto == "Hamlib/rigctld")
+
+        # CI-V row: show/hide
+        if is_icom:
+            self._civ_row_lbl.grid()
+            self._civ_e.master.grid()
+        else:
+            self._civ_row_lbl.grid_remove()
+            self._civ_e.master.grid_remove()
+
+        # Hamlib rows: show/hide
+        if is_hamlib:
+            self._ham_row_lbl.grid()
+            self._ham_host_e.master.grid()
+            self._ham_help_lbl.grid()
+        else:
+            self._ham_row_lbl.grid_remove()
+            self._ham_host_e.master.grid_remove()
+            self._ham_help_lbl.grid_remove()
+
+        # Baud default pentru protocol
         default_baud = CAT_BAUD_DEFAULTS.get(proto, 9600)
         self._baud_v.set(str(default_baud))
 
     def _refresh_ports(self):
-        ports = CATEngine.list_ports() or ["(niciun port)"]
+        ports = CATEngine.list_ports()
+        if not ports: ports = ["(niciun port)"]
         self._port_cb["values"] = ports
         if ports: self._port_v.set(ports[0])
 
@@ -1565,18 +1597,18 @@ class CATSettingsDialog(tk.Toplevel):
     def _test_set_freq(self):
         khz = self._test_freq_e.get().strip()
         if self.cat.set_freq(khz):
-            messagebox.showinfo("CAT", f"Frecvență trimisă: {khz} kHz")
+            messagebox.showinfo("CAT", f"Frecventa trimisa: {khz} kHz")
         else:
             messagebox.showwarning("CAT", "Nu s-a putut trimite frecventa. Verifica conexiunea CAT.")
 
     def _collect_cfg(self):
-        self.cfg["cat_protocol"]    = self._prot_v.get()
-        self.cfg["cat_port"]        = self._port_v.get()
-        self.cfg["cat_civaddr"]     = self._civ_e.get().strip()
-        self.cfg["cat_hamlib_host"] = self._ham_host_e.get().strip()
-        try: self.cfg["cat_hamlib_port"] = int(self._ham_port_e.get().strip())
+        self.cfg["cat_protocol"]     = self._prot_v.get()
+        self.cfg["cat_port"]         = self._port_v.get()
+        self.cfg["cat_civaddr"]      = self._civ_e.get().strip()
+        self.cfg["cat_hamlib_host"]  = self._ham_host_e.get().strip()
+        try:    self.cfg["cat_hamlib_port"] = int(self._ham_port_e.get().strip())
         except: self.cfg["cat_hamlib_port"] = 4532
-        try: self.cfg["cat_baud"] = int(self._baud_v.get())
+        try:    self.cfg["cat_baud"] = int(self._baud_v.get())
         except: self.cfg["cat_baud"] = 9600
         self.cfg["cat_enabled"] = self.cat.connected
 
@@ -1586,24 +1618,27 @@ class CATSettingsDialog(tk.Toplevel):
         self.destroy()
 
     def _refresh_status(self):
-        if self.cat.connected:
-            self._status_led.config(fg=TH["ok"])
-            self._status_lbl.config(text=f"Conectat: {self.cat.protocol}", fg=TH["ok"])
-            if self.cat.last_freq:
-                self._freq_lbl.config(text=f"Freq: {self.cat.last_freq} kHz")
-            if self.cat.last_mode:
-                self._mode_lbl.config(text=f"Mod: {self.cat.last_mode}")
-        else:
-            self._status_led.config(fg=TH["err"])
+        try:
+            if not self.winfo_exists(): return
+            if self.cat.connected:
+                self._status_led.config(fg=TH["ok"])
+                self._status_lbl.config(
+                    text=f"Conectat: {self.cat.protocol}", fg=TH["ok"])
+                if self.cat.last_freq:
+                    self._freq_lbl.config(text=f"Freq: {self.cat.last_freq} kHz")
+                if self.cat.last_mode:
+                    self._mode_lbl.config(text=f"Mod: {self.cat.last_mode}")
+            else:
+                self._status_led.config(fg=TH["err"])
+                if self.cat.last_error:
+                    self._status_lbl.config(
+                        text=f"Eroare: {self.cat.last_error[:40]}", fg=TH["err"])
+        except: pass
 
     def _sched_refresh(self):
         try:
             if not self.winfo_exists(): return
             self._refresh_status()
-            if self.cat.last_freq:
-                self._freq_lbl.config(text=f"Freq: {self.cat.last_freq} kHz")
-            if self.cat.last_mode:
-                self._mode_lbl.config(text=f"Mod: {self.cat.last_mode}")
             self.after(1000, self._sched_refresh)
         except: pass
 
