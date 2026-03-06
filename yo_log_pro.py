@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-YO Log PRO v16.5 FINAL — Professional Multi-Contest Amateur Radio Logger
+YO Log PRO v17.0 — CAT Edition | Professional Multi-Contest Amateur Radio Logger
 Developed by: Ardei Constantin-Cătălin (YO8ACR)
 Email: yo8acr@gmail.com
 
-FIXES v16.5:
+CHANGELOG v17.0:
 - FIXED: Frequency, band, mode and RST persist between QSOs (only call and note clear)
 - Keep all operating parameters until manually changed
 
-FIXES v16.4:
+CHANGELOG v16.x:
 - ADDED: Cabrillo 2.0 export with configurable exchange dialog
 - ADDED: Exchange options: County/Grid/Serial/None for sent, Log/None for received
 - ADDED: Preview dialog before Cabrillo export
@@ -173,7 +173,7 @@ EXCH_RCVD_OPTIONS = {
 
 T = {
     "ro": {
-        "app_title":"YO Log PRO v16.5","call":"Indicativ","band":"Bandă","mode":"Mod",
+        "app_title":"YO Log PRO v17.0","call":"Indicativ","band":"Bandă","mode":"Mod",
         "rst_s":"RST S","rst_r":"RST R","serial_s":"Nr S","serial_r":"Nr R",
         "freq":"Frecv (kHz)","note":"Notă/Locator","log":"LOG","update":"ACTUALIZEAZĂ",
         "search":"🔍 Caută","reset":"Reset","settings":"⚙ Setări",
@@ -240,7 +240,7 @@ T = {
         "cab2_config":"Configurare Cabrillo 2.0","cab2_export":"📤 Exportă",
     },
     "en": {
-        "app_title":"YO Log PRO v16.5","call":"Callsign","band":"Band","mode":"Mode",
+        "app_title":"YO Log PRO v17.0","call":"Callsign","band":"Band","mode":"Mode",
         "rst_s":"RST S","rst_r":"RST R","serial_s":"Nr S","serial_r":"Nr R",
         "freq":"Freq (kHz)","note":"Note/Locator","log":"LOG","update":"UPDATE",
         "search":"🔍 Search","reset":"Reset","settings":"⚙ Settings",
@@ -400,7 +400,8 @@ DEFAULT_CFG = {
     "theme":"Dark Blue (implicit)",
     "cat_enabled":False,"cat_protocol":"Yaesu CAT",
     "cat_port":"","cat_baud":38400,"cat_poll":2000,
-    "cat_civaddr":"94","cat_hamlib_host":"localhost","cat_hamlib_port":4532
+    "cat_civaddr":"94","cat_hamlib_host":"localhost","cat_hamlib_port":4532,
+    "first_run":True
 }
 
 
@@ -1785,6 +1786,130 @@ class ThemeDialog(tk.Toplevel):
         self.result = {"theme":self._theme_v.get(), "colors":colors}
         self.destroy()
 
+
+class FirstRunDialog(tk.Toplevel):
+    """Dialog prima utilizare — apare automat la primul start."""
+    def __init__(self, parent, cfg):
+        super().__init__(parent)
+        self.cfg = cfg
+        self.result = None
+        self.title("YO Log PRO v17.0 — Configurare initiala / First Setup")
+        self.geometry("520x640")
+        self.configure(bg=TH["bg"])
+        self.resizable(False, False)
+        self.transient(parent)
+        self.grab_set()
+        self.protocol("WM_DELETE_WINDOW", self._save)  # nu permite inchidere fara salvare
+        self._build()
+        center_dialog(self, parent)
+
+    def _build(self):
+        lo  = {"bg":TH["bg"], "fg":TH["fg"],   "font":("Consolas",11)}
+        lob = {"bg":TH["bg"], "fg":TH["gold"],  "font":("Consolas",12,"bold")}
+        lo9 = {"bg":TH["bg"], "fg":TH["warn"],  "font":("Consolas",9)}
+        eo  = {"bg":TH["entry_bg"], "fg":TH["gold"], "font":("Consolas",12,"bold"),
+               "insertbackground":TH["fg"], "justify":"center"}
+        eon = {"bg":TH["entry_bg"], "fg":TH["fg"],   "font":("Consolas",11),
+               "insertbackground":TH["fg"]}
+
+        # ── Banner ──
+        banner = tk.Frame(self, bg=TH["header_bg"], pady=12)
+        banner.pack(fill="x")
+        tk.Label(banner, text="📻  YO Log PRO v17.0",
+                 bg=TH["header_bg"], fg=TH["gold"],
+                 font=("Consolas",16,"bold")).pack()
+        tk.Label(banner, text="CAT Edition — Amateur Radio Logger",
+                 bg=TH["header_bg"], fg=TH["cyan"],
+                 font=("Consolas",10)).pack()
+        tk.Label(banner, text="Developed by Ardei Constantin-Catalin (YO8ACR)",
+                 bg=TH["header_bg"], fg=TH["fg"],
+                 font=("Consolas",9)).pack(pady=(2,0))
+
+        # ── Titlu sectiune ──
+        tk.Label(self, text="  Configurare initiala / Initial Setup",
+                 bg=TH["bg"], fg=TH["cyan"],
+                 font=("Consolas",11,"bold")).pack(anchor="w", padx=16, pady=(12,4))
+
+        tk.Frame(self, bg=TH["warn"], height=1).pack(fill="x", padx=16, pady=(0,8))
+
+        # ── Grid campuri ──
+        gf = tk.Frame(self, bg=TH["bg"])
+        gf.pack(fill="x", padx=16)
+        gf.columnconfigure(1, weight=1)
+
+        def row(r, label, key, default, entry_opts, hint=None, upper=False):
+            tk.Label(gf, text=label, **lo).grid(
+                row=r*2, column=0, sticky="w", pady=(6,0), padx=(0,12))
+            e = tk.Entry(gf, width=28, **entry_opts)
+            e.insert(0, self.cfg.get(key, default))
+            if upper:
+                e.bind("<KeyRelease>", lambda ev, en=e: (
+                    en.delete(0,"end"),
+                    en.insert(0, ev.widget.get().upper())
+                ) or None)
+            e.grid(row=r*2, column=1, sticky="ew", pady=(6,0))
+            if hint:
+                tk.Label(gf, text=hint, **lo9).grid(
+                    row=r*2+1, column=1, sticky="w", pady=(0,2))
+            return e
+
+        self._e = {}
+        self._e["call"]    = row(0, "Indicativ / Callsign *", "call",    "YO8ACR",  eo,
+                                  "Indicativul tau de radioamator", upper=True)
+        self._e["loc"]     = row(1, "Locator Maidenhead *",   "loc",     "KN37",    eo,
+                                  "Grid locator (ex: KN37, JO21, ...)", upper=True)
+        self._e["jud"]     = row(2, "Judet / County",         "jud",     "NT",      eo,
+                                  "Cod judet 2 litere (ex: NT, IS, BV...)", upper=True)
+        self._e["op_name"] = row(3, "Nume operator / Name",   "op_name", "",        eon,
+                                  "Prenume si Nume (pentru exporturi)")
+        self._e["addr"]    = row(4, "Adresa / Address",       "addr",    "",        eon,
+                                  "Adresa postala (optional, pentru exporturi)")
+        self._e["power"]   = row(5, "Putere TX / TX Power",   "power",   "100",     eon,
+                                  "Putere in wati (ex: 100)")
+        self._e["email"]   = row(6, "Email",                  "email",   "",        eon,
+                                  "Email de contact (optional)")
+
+        # ── Limba / Language ──
+        tk.Label(gf, text="Limba / Language", **lo).grid(
+            row=14, column=0, sticky="w", pady=(10,0), padx=(0,12))
+        self._lang_v = tk.StringVar(value=self.cfg.get("lang","ro"))
+        lf2 = tk.Frame(gf, bg=TH["bg"]); lf2.grid(row=14, column=1, sticky="w", pady=(10,0))
+        for lcode, lname in [("ro","🇷🇴 Română"), ("en","🇬🇧 English")]:
+            tk.Radiobutton(lf2, text=lname, variable=self._lang_v, value=lcode,
+                           bg=TH["bg"], fg=TH["fg"], selectcolor=TH["entry_bg"],
+                           activebackground=TH["bg"],
+                           font=("Consolas",11)).pack(side="left", padx=8)
+
+        # ── Nota obligatorie ──
+        tk.Frame(self, bg=TH["accent"], height=1).pack(fill="x", padx=16, pady=(12,4))
+        tk.Label(self,
+                 text="* Indicativul si Locatorul sunt obligatorii pentru export corect.",
+                 bg=TH["bg"], fg=TH["warn"], font=("Consolas",9)).pack(anchor="w", padx=16)
+
+        # ── Butoane ──
+        bf = tk.Frame(self, bg=TH["bg"]); bf.pack(pady=14)
+        tk.Button(bf,
+                  text="  ✅  Salveaza si Incepe / Save & Start  ",
+                  command=self._save,
+                  bg=TH["ok"], fg="white",
+                  font=("Consolas",12,"bold")).pack()
+
+    def _save(self):
+        call = self._e["call"].get().strip().upper()
+        if not call:
+            messagebox.showwarning("Atentie", "Indicativul este obligatoriu!")
+            self._e["call"].focus_set(); return
+
+        for k, e in self._e.items():
+            v = e.get().strip()
+            self.cfg[k] = v.upper() if k in {"call","loc","jud"} else v
+
+        self.cfg["lang"] = self._lang_v.get()
+        self.cfg["first_run"] = False
+        self.result = self.cfg
+        self.destroy()
+
+
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
@@ -1814,6 +1939,47 @@ class App(tk.Tk):
         self.bind('<Control-z>',lambda e:self._undo()); self.bind('<Control-f>',lambda e:self._search_dlg())
         self.bind('<F2>',self._cycle_band); self.bind('<F3>',self._cycle_mode)
         self._tick_clock(); self._tick_save()
+        # Prima utilizare — arata dialog configurare
+        if self.cfg.get("first_run", True):
+            self.after(200, self._first_run_setup)
+
+    def _first_run_setup(self):
+        """Apare automat la primul start — cere indicativ si informatii."""
+        d = FirstRunDialog(self, self.cfg)
+        self.wait_window(d)
+        if d.result:
+            self.cfg.update(d.result)
+            DM.save("config.json", self.cfg)
+            L.s(self.cfg.get("lang","ro"))
+            self._rebuild()
+            messagebox.showinfo(
+                "YO Log PRO v17.0",
+                f"Bun venit, {self.cfg.get('call','')}!\n\nYO Log PRO v17.0 este gata de utilizare.\n73 de YO8ACR!"
+            )
+
+    def _cat_quick_connect(self):
+        """Conectare rapida din meniu cu setarile salvate."""
+        if not self.cfg.get("cat_port") and not self.cfg.get("cat_protocol","").startswith("Hamlib"):
+            messagebox.showinfo("CAT", "Configureaza portul COM mai intai: Meniu CAT -> Setari CAT")
+            self._cat_dlg(); return
+        ok, msg = CAT.connect(self.cfg)
+        if self.cat_lbl:
+            self.cat_lbl.config(text=f"CAT: {'ON' if ok else 'ERR'}",
+                                fg=TH["ok"] if ok else TH["err"])
+        messagebox.showinfo("CAT", msg)
+
+    def _cat_quick_disconnect(self):
+        CAT.disconnect()
+        if self.cat_lbl:
+            self.cat_lbl.config(text="CAT: OFF", fg=TH["err"])
+
+    def _apply_theme_quick(self, theme_name):
+        """Aplica o tema direct din meniu fara dialog."""
+        self.cfg["theme"] = theme_name
+        self.cfg["custom_colors"] = {}
+        DM.save("config.json", self.cfg)
+        self._apply_theme_from_cfg()
+        self._rebuild()
 
     def _apply_theme_from_cfg(self):
         global TH
@@ -1906,10 +2072,20 @@ class App(tk.Tk):
         cm.add_command(label=L.t("contest_mgr"),command=self._mgr); cm.add_separator()
         for cid,cd in self.contests.items():
             cm.add_command(label=f"⚡ {cd.get('name_'+L.g(),cd.get('name_ro',cid))}",command=lambda c=cid:self._switch_contest(c))
-        lm=tk.Menu(mb,tearoff=0); mb.add_cascade(label="📝 Log",menu=lm)
-        lm.add_command(label="📝 Log Nou / New Log",command=self._new_log_dlg)
-        lm.add_command(label="🎨 Teme / Themes",command=self._theme_dlg)
-        lm.add_command(label="📡 CAT Control",command=self._cat_dlg)
+        lm=tk.Menu(mb,tearoff=0); mb.add_cascade(label="Log",menu=lm)
+        lm.add_command(label="Log Nou / New Log",command=self._new_log_dlg)
+        lm.add_separator()
+        lm.add_command(label="Salveaza acum",command=lambda:DM.save_log(self._cid(),self.log))
+        catn=tk.Menu(mb,tearoff=0); mb.add_cascade(label="CAT",menu=catn)
+        catn.add_command(label="Setari CAT / CAT Settings",command=self._cat_dlg)
+        catn.add_separator()
+        catn.add_command(label="Conecteaza / Connect",command=lambda:self._cat_quick_connect())
+        catn.add_command(label="Deconecteaza / Disconnect",command=lambda:self._cat_quick_disconnect())
+        temn=tk.Menu(mb,tearoff=0); mb.add_cascade(label="Teme",menu=temn)
+        temn.add_command(label="Editor teme / Themes",command=self._theme_dlg)
+        temn.add_separator()
+        for tnm in THEMES.keys():
+            temn.add_command(label=tnm,command=lambda t=tnm:self._apply_theme_quick(t))
         tm=tk.Menu(mb,tearoff=0); mb.add_cascade(label=L.t("tools"),menu=tm)
         tm.add_command(label=L.t("search"),command=self._search_dlg); tm.add_command(label=L.t("timer"),command=self._timer_dlg); tm.add_separator()
         tm.add_command(label=L.t("imp_adif"),command=self._import_adif); tm.add_command(label=L.t("imp_csv"),command=self._import_csv)
@@ -1934,10 +2110,14 @@ class App(tk.Tk):
         rf=tk.Frame(h,bg=TH["header_bg"]); rf.pack(side="right",padx=10)
         self.clk=tk.Label(rf,text="UTC 00:00:00",bg=TH["header_bg"],fg=TH["gold"],font=("Consolas",12,"bold")); self.clk.pack(side="right",padx=8)
         self.rate_lbl=tk.Label(rf,text="",bg=TH["header_bg"],fg=TH["ok"],font=("Consolas",10)); self.rate_lbl.pack(side="right",padx=8)
-        self.cat_lbl=tk.Label(rf,text="📡 CAT: OFF",bg=TH["header_bg"],fg=TH["err"],font=("Consolas",10),cursor="hand2")
-        self.cat_lbl.pack(side="right",padx=8)
+        self.cat_lbl=tk.Label(rf,text="CAT: OFF",bg=TH["header_bg"],fg=TH["err"],
+                               font=("Consolas",10,"bold"),cursor="hand2")
+        self.cat_lbl.pack(side="right",padx=6)
         self.cat_lbl.bind("<Button-1>",lambda e:self._cat_dlg())
-        if CAT.connected: self.cat_lbl.config(text=f"📡 {CAT.last_freq} kHz  {CAT.last_mode}",fg=TH["ok"])
+        if CAT.connected:
+            freq_txt = f"{CAT.last_freq}kHz" if CAT.last_freq else ""
+            mode_txt = CAT.last_mode or ""
+            self.cat_lbl.config(text=f"CAT:{freq_txt} {mode_txt}".strip(),fg=TH["ok"])
         self.lang_v=tk.StringVar(value=self.cfg.get("lang","ro"))
         lc=ttk.Combobox(rf,textvariable=self.lang_v,values=["ro","en"],state="readonly",width=4); lc.pack(side="right",padx=3); lc.bind("<<ComboboxSelected>>",self._on_lang)
         self.cv=tk.StringVar(value=self._cid())
@@ -2126,7 +2306,7 @@ class App(tk.Tk):
         else: self.log.insert(0,q); self.undo_stack.append(("add",0,q)); self.serial+=1
         self._clr(); self._refresh(); DM.save_log(self._cid(),self.log)
 
-    # ── v16.5 FIX: Only clear call and note — keep freq, band, mode, RST ──
+    # ── v17.0: Only clear call and note — keep freq, band, mode, RST ──
     def _clr(self):
         """Clear only call and note fields. Frequency, band, mode and RST persist."""
         self.ent["call"].delete(0, "end")
@@ -2297,7 +2477,7 @@ class App(tk.Tk):
 
     def _about(self):
         d=tk.Toplevel(self); d.title(L.t("about")); d.geometry("460x280"); d.configure(bg=TH["bg"]); d.transient(self)
-        tk.Label(d,text="📻 YO Log PRO v16.5",bg=TH["bg"],fg=TH["accent"],font=("Consolas",16,"bold")).pack(pady=12)
+        tk.Label(d,text="📻 YO Log PRO v17.0 — CAT Edition",bg=TH["bg"],fg=TH["accent"],font=("Consolas",16,"bold")).pack(pady=12)
         tk.Label(d,text=L.t("credits"),bg=TH["bg"],fg=TH["fg"],font=self.fn).pack(pady=8)
         tk.Label(d,text=L.t("usage"),bg=TH["bg"],fg=TH["fg"],font=("Consolas",9)).pack(pady=6)
         tk.Button(d,text=L.t("close"),command=d.destroy,bg=TH["accent"],fg="white",width=12).pack(pady=10); center_dialog(d,self)
@@ -2391,7 +2571,7 @@ class App(tk.Tk):
             nm=cc.get("cabrillo_name","") or cc.get("name_en",cc.get("name_ro","CONTEST"))
             pw=int(self.cfg.get("power","100")); cat_power="QRP" if pw<=5 else ("LOW" if pw<=100 else "HIGH")
             ef=cc.get("exchange_format","none")
-            lines=["START-OF-LOG: 3.0",f"CONTEST: {nm}",f"CALLSIGN: {my}",f"GRID-LOCATOR: {self.cfg.get('loc','')}","CATEGORY-OPERATOR: SINGLE-OP","CATEGORY-BAND: ALL",f"CATEGORY-POWER: {cat_power}","CATEGORY-MODE: MIXED",f"NAME: {self.cfg.get('op_name','')}",f"ADDRESS: {self.cfg.get('addr','')}","SOAPBOX: Logged with YO Log PRO v16.5",f"SOAPBOX: {self.cfg.get('soapbox','73 GL')}","CREATED-BY: YO Log PRO v16.5"]
+            lines=["START-OF-LOG: 3.0",f"CONTEST: {nm}",f"CALLSIGN: {my}",f"GRID-LOCATOR: {self.cfg.get('loc','')}","CATEGORY-OPERATOR: SINGLE-OP","CATEGORY-BAND: ALL",f"CATEGORY-POWER: {cat_power}","CATEGORY-MODE: MIXED",f"NAME: {self.cfg.get('op_name','')}",f"ADDRESS: {self.cfg.get('addr','')}","SOAPBOX: Logged with YO Log PRO v17.0",f"SOAPBOX: {self.cfg.get('soapbox','73 GL')}","CREATED-BY: YO Log PRO v17.0"]
             for q in self.log:
                 freq=q.get("f","") or str(BAND_FREQ.get(q.get("b",""),0))
                 try: freq=str(int(float(freq)))
@@ -2426,7 +2606,7 @@ class App(tk.Tk):
                     cats=cc.get("categories",["Individual"])
                     cat_num=str(cats.index(cat_val)+1) if cat_val in cats else "1"
             _,_,tot=Score.total(self.log,cc,self.cfg)
-            lines=["START-OF-LOG: 2.0","CREATED BY: YO Log PRO v16.5",f"CONTEST: {nm}",f"CALLSIGN: {my}",f"NAME: {self.cfg.get('op_name','')}",f"CATEGORY: {cat_num}",f"CLAIMED-SCORE: {tot}",f"ADDRESS: {self.cfg.get('addr','')}",f"EMAIL: {self.cfg.get('email','')}","SOAPBOX: Logged with YO Log PRO v16.5",f"SOAPBOX: {self.cfg.get('soapbox','73 GL')}","SOAPBOX:  mo  yyyy mm dd hhmm call         rs exc call          rs exc","SOAPBOX:  ** ********** **** ************* **  ** ************* **  **"]
+            lines=["START-OF-LOG: 2.0","CREATED BY: YO Log PRO v17.0",f"CONTEST: {nm}",f"CALLSIGN: {my}",f"NAME: {self.cfg.get('op_name','')}",f"CATEGORY: {cat_num}",f"CLAIMED-SCORE: {tot}",f"ADDRESS: {self.cfg.get('addr','')}",f"EMAIL: {self.cfg.get('email','')}","SOAPBOX: Logged with YO Log PRO v17.0",f"SOAPBOX: {self.cfg.get('soapbox','73 GL')}","SOAPBOX:  mo  yyyy mm dd hhmm call         rs exc call          rs exc","SOAPBOX:  ** ********** **** ************* **  ** ************* **  **"]
             for q in self.log:
                 freq=q.get("f","") or str(BAND_FREQ.get(q.get("b",""),0))
                 try: freq=str(int(float(freq)))
@@ -2451,7 +2631,7 @@ class App(tk.Tk):
         if not self._check_before_export(): return
         try:
             my_loc=self.cfg.get("loc","")
-            lines=["<ADIF_VER:5>3.1.0","<PROGRAMID:14>YO_Log_PRO_v16","<PROGRAMVERSION:5>16.5",f"<MY_GRIDSQUARE:{len(my_loc)}>{my_loc}","<EOH>"]
+            lines=["<ADIF_VER:5>3.1.0","<PROGRAMID:14>YO_Log_PRO_v17","<PROGRAMVERSION:5>17.0",f"<MY_GRIDSQUARE:{len(my_loc)}>{my_loc}","<EOH>"]
             for q in self.log:
                 dc=q.get("d","").replace("-",""); tc=q.get("t","").replace(":","")+"00"; note=q.get("n","")
                 freq_mhz=""
@@ -2493,7 +2673,7 @@ class App(tk.Tk):
         try:
             my=self.cfg.get("call","NOCALL"); my_loc=self.cfg.get("loc",""); cc=self._cc()
             nm=cc.get("cabrillo_name","") or cc.get("name_en","VHF"); now=datetime.datetime.utcnow()
-            lines=["[REG1TEST;1]",f"TName={nm}",f"TDate={now.strftime('%y%m%d')};{now.strftime('%y%m%d')}",f"PCall={my}",f"PWWLo={my_loc}","PExch=",f"PAdr1={self.cfg.get('addr','')}","PBand=144","PSect=","[Remarks]","Logged with YO Log PRO v16.5","[QSORecords]"]
+            lines=["[REG1TEST;1]",f"TName={nm}",f"TDate={now.strftime('%y%m%d')};{now.strftime('%y%m%d')}",f"PCall={my}",f"PWWLo={my_loc}","PExch=",f"PAdr1={self.cfg.get('addr','')}","PBand=144","PSect=","[Remarks]","Logged with YO Log PRO v17.0","[QSORecords]"]
             for q in self.log:
                 dt=q.get("d","").replace("-","")[2:]; tm=q.get("t","").replace(":","")[:4]; loc=q.get("n","")
                 km=int(Loc.dist(my_loc,loc)) if my_loc and Loc.valid(loc) else 0
@@ -2509,7 +2689,7 @@ class App(tk.Tk):
         if not self._check_before_export(): return
         try:
             my=self.cfg.get("call","NOCALL"); cc=self._cc(); nm=cc.get("name_"+L.g(),cc.get("name_ro","?"))
-            lines=[f"{'='*90}",f"YO Log PRO v16.5 — {my} — {nm}",f"Generated: {datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M')} UTC",f"{'='*90}",
+            lines=[f"{'='*90}",f"YO Log PRO v17.0 — {my} — {nm}",f"Generated: {datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M')} UTC",f"{'='*90}",
                    f"{'Nr':<4} {'Call':<13} {'Freq':<8} {'Band':<6} {'Mode':<6} {'RSTt':<5} {'RSTr':<5} {'Note':<10} {'Country':<15} {'Date':<11} {'Time':<6} {'Pts':<5}",f"{'-'*90}"]
             for i,q in enumerate(self.log):
                 c,_=DXCC.lookup(q.get("c",""))
